@@ -93,7 +93,12 @@ function scanValue(src, from) {
     }
     if (ch === '"' || ch === "'" || ch === '`') { inStr = true; quote = ch; i++; continue; }
     if (ch === '(' || ch === '[' || ch === '{') { depth++; i++; continue; }
-    if (ch === ')' || ch === ']' || ch === '}') { depth--; i++; if (depth <= 0) return i; continue; }
+    if (ch === ')' || ch === ']' || ch === '}') {
+      depth--;
+      i++;
+      if (depth < 0) return i;
+      continue;
+    }
     if (depth === 0 && (ch === ';' || ch === ',')) return i;
     if (depth === 0 && ch === '\n') {
       const next = skipSpace(src, i + 1);
@@ -107,12 +112,7 @@ function scanValue(src, from) {
         head.indexOf('|') === 0 ||
         head.indexOf('?') === 0 ||
         head.indexOf(':') === 0 ||
-        head.indexOf('.') === 0 ||
-        head.indexOf('const ') === 0 ||
-        head.indexOf('let ') === 0 ||
-        head.indexOf('var ') === 0 ||
-        head.indexOf('function ') === 0 ||
-        head.indexOf('return ') === 0;
+        head.indexOf('.') === 0;
       if (!keepsGoing) return i;
     }
     i++;
@@ -165,7 +165,9 @@ function findAssignment(src, name) {
 function replaceFunction(src, name, code) {
   const found = findFunction(src, name);
   if (!found) return null;
-  return src.slice(0, found.start) + code + src.slice(found.end);
+  let start = found.start;
+  if (src.slice(Math.max(0, start - 6), start) === 'async ') start = start - 6;
+  return src.slice(0, start) + code + src.slice(found.end);
 }
 
 function replaceConst(src, name, code) {
