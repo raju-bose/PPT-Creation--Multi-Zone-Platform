@@ -284,7 +284,7 @@ const NEW_SHOWLOGIN = `function showLogin(msg){
 }`;
 
 const NEW_SHOWSETUP = `function showSetup(msg){
-  gate('<h2>Platform not ready</h2><p class="gate-sub">'+(msg||'The platform server is not reachable yet.')+'</p><p class="gate-foot">Ask your administrator to check the deployment.</p>');
+  gate('<h2>Platform not ready</h2><p class="gate-sub">'+(msg||'The platform server is notachable yet.')+'</p><p class="gate-foot">Ask your administrator to check the deployment.</p>');
 }`;
 
 const NEW_MAPSITE = `const mapSite=r=>Object.assign({},r,{region:r.region||'east',subfolders:Array.isArray(r.subfolders)?r.subfolders:[]});`;
@@ -357,6 +357,13 @@ const ZONE_CODE = `
   else mountZoneBar();
 })();
 `;
+
+const TEXT_REPLACEMENTS = [
+  [
+    "'https://drive.google.com/file/d/'+encodeURIComponent(p.assetId)+'/view",
+    "'/api/app?f='+encodeURIComponent(p.assetId)",
+  ],
+];
 
 function extractDecl(src, name) {
   const fn = findFunction(src, name);
@@ -550,6 +557,13 @@ async function main() {
     log('zone switcher added');
   } else {
     log('could not find the app wrapper, the zone switcher was not added');
+  }
+
+  for (const pair of TEXT_REPLACEMENTS) {
+    if (appJs.indexOf(pair[0]) >= 0) {
+      appJs = appJs.split(pair[0]).join(pair[1]);
+      log('replaced old file link');
+    }
   }
 
   appJs = appJs.split('East Region').join('North Zone + East Zone');

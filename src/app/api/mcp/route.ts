@@ -29,6 +29,12 @@ function authorized(req: NextRequest): boolean {
   return !!verifySession(req.cookies.get(APP_COOKIE)?.value);
 }
 
+function folderNames(site: any): string[] {
+  return (site.subfolders || []).map((f: any) =>
+    typeof f === 'string' ? f : String(f.name || f.id || ''),
+  );
+}
+
 const TOOLS = [
   {
     name: 'list_zones',
@@ -171,12 +177,7 @@ async function loadAll() {
 function progress(site: any, photos: any[]) {
   const mine = photos.filter((p) => p.siteId === site.id);
   const done = new Set(mine.map((p) => p.folderId));
-  const total = (site.subfolders || []).length;
-  const folders = (site.subfolders || []).map((f: any) => ({
-    id: f.id,
-    name: f.name,
-    uploaded: done.has(f.id),
-  }));
+  const names = folderNames(site);
   return {
     siteCode: site.code,
     siteName: site.name,
@@ -184,13 +185,13 @@ function progress(site: any, photos: any[]) {
     region: site.region,
     zone: zoneLabel(site.region),
     layout: site.layout,
-    folders: total,
+    folders: names.length,
     uploaded: done.size,
-    pending: Math.max(0, total - done.size),
-    progressPct: total ? Math.round((done.size / total) * 100) : 0,
+    pending: Math.max(0, names.length - done.size),
+    progressPct: names.length ? Math.round((done.size / names.length) * 100) : 0,
     lastUpload: mine.length ? Math.max(...mine.map((p) => p.uploadedAt)) : 0,
-    status: total && done.size >= total ? 'complete' : 'pending',
-    openFolders: folders.filter((f) => !f.uploaded).map((f) => f.name),
+    status: names.length && done.size >= names.length ? 'complete' : 'pending',
+    openFolders: names.filter((n) => !done.has(n)),
   };
 }
 
@@ -232,11 +233,7 @@ async function callTool(name: string, args: any, req: NextRequest) {
       address: site.address,
       latlong: site.latlong,
       createdAt: site.createdAt,
-      folderList: (site.subfolders || []).map((f: any) => ({
-        id: f.id,
-        name: f.name,
-        uploaded: done.has(f.id),
-      })),
+      folderList: folderNames(site).map((n) => ({ name: n, uploaded: done.has(n) })),
       photos: mine.map((p: any) => ({
         id: p.id,
         folder: p.folderId,
@@ -281,14 +278,12 @@ async function callTool(name: string, args: any, req: NextRequest) {
     const siteCode = String(a.site_code || '').toLowerCase();
     const site = sites.find((s: any) => String(s.code).toLowerCase() === siteCode);
     if (!site) throw new Error('No site found with code ' + a.site_code);
-    const folderName = String(a.folder || '').trim();
-    const folder = (site.subfolders || []).find(
-      (f: any) => String(f.name).toLowerCase() === folderName.toLowerCase(),
-    );
+    const names = folderNames(site);
+    const wanted = String(a.folder || '').trim().toLowerCase();
+    const folder = names.find((n) => n.toLowerCase() === wanted);
     if (!folder) {
       throw new Error(
-        'No sub folder called ' + folderName + '. Available: ' +
-          (site.subfolders || []).map((f: any) => f.name).join(', '),
+        'No sub folder called ' + a.folder + '. Available: ' + names.join(', '),
       );
     }
     let buf: Buffer;
@@ -307,14 +302,22 @@ async function callTool(name: string, args: any, req: NextRequest) {
     if (!buf.length) throw new Error('That file came back empty');
     const fileName = String(a.file_name || 'photo.jpg').replace(/[^A-Za-z0-9._-]/g, '_');
     const path =
-      site.id + '/' + folder.id + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + fileName;
+      site.id +
+      '/' +
+      encodeURIComponent(folder) +
+      '/' +
+      Date.now() +
+      '-' +
+      Math.random().toString(36).slice(2, 8) +
+      '-' +
+      fileName;
     const up = await sb().storage.from('photos').upload(path, buf, { contentType, upsert: true });
     if (up.error) throw new Error(up.error.message);
     const { data, error } = await sb()
       .from('photos')
       .insert({
         site_id: site.id,
-        folder_id: folder.id,
+        folder_id: folder,
         file_id: path,
         file_name: String(a.file_name || 'photo.jpg'),
         mime: contentType,
@@ -329,7 +332,7 @@ async function callTool(name: string, args: any, req: NextRequest) {
     return {
       ok: true,
       siteCode: site.code,
-      folder: folder.name,
+      folder,
       fileName: data.file_name,
       sizeBytes: data.size_bytes,
     };
@@ -341,10 +344,8 @@ async function callTool(name: string, args: any, req: NextRequest) {
     if (!site) throw new Error('No site found with code ' + a.site_code);
     let mine = photos.filter((p) => p.siteId === site.id);
     if (a.folder) {
-      const folder = (site.subfolders || []).find(
-        (f: any) => String(f.name).toLowerCase() === String(a.folder).toLowerCase(),
-      );
-      if (folder) mine = mine.filter((p) => p.folderId === folder.id);
+      const wanted = String(a.folder).toLowerCase();
+      mine = mine.filter((p) => String(p.folderId).toLowerCase() === wanted);
     }
     const out = [];
     for (const p of mine) {
@@ -370,7 +371,9 @@ async function callTool(name: string, args: any, req: NextRequest) {
   if (name === 'export_excel') {
     const token = mcpToken();
     const url =
-      baseUrl(req) + '/api/app?export=excel&region=' + encodeURIComponent(region) +
+      baseUrl(req) +
+      '/api/app?export=excel&region=' +
+      encodeURIComponent(region) +
       (token ? '&token=' + encodeURIComponent(token) : '');
     return { url, region };
   }
