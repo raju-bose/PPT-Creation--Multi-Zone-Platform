@@ -7,11 +7,11 @@
  * the result into public/ so Vercel can serve it.
  *
  * Output:
- *   public/platform.html              the app shell
- *   public/assets/app.js              patched application script
- *   public/assets/legacy.css          original stylesheet
+ *   public/platform.html               the app shell
+ *   public/assets/app.js               patched application script
+ *   public/assets/legacy.css           original stylesheet
  *   public/assets/bhf141.template.json slide template for the server
- *   public/assets/folders.json        sub folder rules per layout
+ *   public/assets/folders.json         sub folder rules per layout
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -125,8 +125,7 @@ function findFunction(src, name) {
   let at = src.indexOf(marker);
   while (at >= 0) {
     const prev = at > 0 ? src[at - 1] : ' ';
-    const next = src[at + marker.length];
-    if (!isWordChar(prev) && !isWordChar(next)) {
+    if (!isWordChar(prev)) {
       const brace = src.indexOf('{', at);
       const end = findBlock(src, brace, '{', '}');
       if (end > 0) return { start: at, end: end, text: src.slice(at, end) };
@@ -136,28 +135,29 @@ function findFunction(src, name) {
   return null;
 }
 
-function findConst(src, name) {
-  const marker = name + '=';
-  let at = src.indexOf(marker);
+function findAssignment(src, name) {
+  let at = src.indexOf(name);
   while (at >= 0) {
     const prev = at > 0 ? src[at - 1] : ' ';
-    const next = src[at + marker.length];
-    if (!isWordChar(prev) && !isWordChar(next)) {
-      const eq = at + marker.length;
+    let i = skipSpace(src, at + name.length);
+    if (!isWordChar(prev) && src[i] === '=' && src[i + 1] !== '=') {
+      const eq = i + 1;
       const end = scanValue(src, eq);
-      const head = src.slice(Math.max(0, at - 12), at);
-      let kwAt = -1;
+      let start = at;
+      const head = src.slice(Math.max(0, at - 20), at);
+      let best = -1;
       const keywords = ['const ', 'let ', 'var '];
       for (const kw of keywords) {
         const p = head.lastIndexOf(kw);
         if (p >= 0) {
-          const abs = Math.max(0, at - 12) + p;
-          if (abs > kwAt) kwAt = abs;
+          const abs = Math.max(0, at - 20) + p;
+          if (abs > best) best = abs;
         }
       }
-      return { start: kwAt >= 0 ? kwAt : at, eq: eq, end: end, text: src.slice(kwAt >= 0 ? kwAt : at, end) };
+      if (best >= 0) start = best;
+      return { nameAt: at, start: start, eq: eq, end: end, text: src.slice(start, end) };
     }
-    at = src.indexOf(marker, at + 1);
+    at = src.indexOf(name, at + 1);
   }
   return null;
 }
@@ -169,7 +169,7 @@ function replaceFunction(src, name, code) {
 }
 
 function replaceConst(src, name, code) {
-  const found = findConst(src, name);
+  const found = findAssignment(src, name);
   if (!found) return null;
   return src.slice(0, found.start) + code + src.slice(found.end);
 }
@@ -235,9 +235,9 @@ const NEW_PHOTOURL = `function photoUrl(fileId,big){ return '/api/app?f='+encode
 const NEW_FETCHBLOB = `async function fetchBlob(fileId){
   const r=await call('getPhoto',{fileId:fileId});
   const bin=atob(r.data||'');
-  const arr=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++){ arr[i]=bin.charCodeAt(i); }
-  return new Blob([arr],{type:r.type||'image/jpeg'});
+  const u=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+  return new Blob([u],{type:r.type||'image/jpeg'});
 }`;
 
 const NEW_SHOWLOGIN = `function showLogin(msg){
@@ -261,7 +261,7 @@ const NEW_SHOWLOGIN = `function showLogin(msg){
     e.preventDefault();
     const btn=form.querySelector('button[type=submit]');
     const raw=String((document.getElementById('g-name')||{}).value||'');
-    const id=raw.split(' ').join(' ').trim();
+    const id=raw.split(' ').filter(Boolean).join(' ');
     const pw=String((document.getElementById('g-code')||{}).value||'');
     const msgBox=document.getElementById('g-msg');
     if(!id){ if(msgBox){ msgBox.textContent='Enter your login ID.'; msgBox.hidden=false; } return; }
@@ -285,7 +285,7 @@ const NEW_SHOWSETUP = `function showSetup(msg){
   gate('<h2>Platform not ready</h2><p class="gate-sub">'+(msg||'The platform server is not reachable yet.')+'</p><p class="gate-foot">Ask your administrator to check the deployment.</p>');
 }`;
 
-const NEW_MAPSITE = `const mapSite=s=>Object.assign({},s,{region:s.region||'east',subfolders:s.subfolders||[]});`;
+const NEW_MAPSITE = `const mapSite=r=>Object.assign({},r,{region:r.region||'east',subfolders:Array.isArray(r.subfolders)?r.subfolders:[]});`;
 
 const NEW_ISPPTNAME = `function isPptName(n){ return true; }`;
 
@@ -359,20 +359,20 @@ const ZONE_CODE = `
 function extractDecl(src, name) {
   const fn = findFunction(src, name);
   if (fn) return fn.text;
-  const c = findConst(src, name);
+  const c = findAssignment(src, name);
   if (c) return 'const ' + name + '=' + src.slice(c.eq, c.end) + ';';
   return null;
 }
 
 function buildRules(appJs, templateJson) {
-  const regionStart = appJs.indexOf('const ORT={');
-  const regionMarker = appJs.indexOf('const SITE_FOLDERS=');
-  if (regionStart < 0 || regionMarker < 0) {
+  const ort = findAssignment(appJs, 'ORT');
+  const siteFolders = findAssignment(appJs, 'SITE_FOLDERS');
+  if (!ort || !siteFolders) {
     log('folder rules block not found, folders.json skipped');
     return null;
   }
-  const regionEnd = appJs.indexOf('\n', regionMarker);
-  const region = appJs.slice(regionStart, regionEnd);
+  const region = appJs.slice(ort.start, siteFolders.end);
+  log('folder rules block is ' + region.length + ' bytes');
   let tpl = null;
   try {
     tpl = JSON.parse(templateJson);
@@ -401,6 +401,7 @@ function buildRules(appJs, templateJson) {
         log('cannot resolve ' + name);
         return null;
       }
+      log('resolving ' + name);
       extra.push(decl);
     }
   }
@@ -467,17 +468,35 @@ async function main() {
     for (const key of Object.keys(rules)) {
       log('layout ' + key + ' has ' + rules[key].folders.length + ' sub folders');
     }
+  } else {
+    log('folder rules could not be built');
   }
 
-  appJs = replaceFunction(appJs, 'call', NEW_CALL) || appJs;
-  appJs = replaceFunction(appJs, 'fetchBlob', NEW_FETCHBLOB) || appJs;
-  appJs = replaceFunction(appJs, 'photoUrl', NEW_PHOTOURL) || appJs;
-  appJs = replaceFunction(appJs, 'isPptName', NEW_ISPPTNAME) || appJs;
-  appJs = replaceFunction(appJs, 'showSetup', NEW_SHOWSETUP) || appJs;
+  const patchFunction = (src, name, code) => {
+    const out = replaceFunction(src, name, code);
+    if (out) return out;
+    return replaceConst(src, name, code);
+  };
+
+  appJs = patchFunction(appJs, 'call', NEW_CALL) || appJs;
+  appJs = patchFunction(appJs, 'fetchBlob', NEW_FETCHBLOB) || appJs;
+  appJs = patchFunction(appJs, 'photoUrl', NEW_PHOTOURL) || appJs;
+  appJs = patchFunction(appJs, 'isPptName', NEW_ISPPTNAME) || appJs;
+  appJs = patchFunction(appJs, 'showSetup', NEW_SHOWSETUP) || appJs;
   appJs = replaceConst(appJs, 'mapSite', NEW_MAPSITE) || appJs;
 
+  const mapPhoto = findAssignment(appJs, 'mapPhoto');
+  if (mapPhoto) {
+    const original = appJs.slice(mapPhoto.eq, mapPhoto.end);
+    const wrapper =
+      'const __mapPhotoOrig=' + original + ';' +
+      'const mapPhoto=r=>{ const p=__mapPhotoOrig(r); return Object.assign({},p,{uploaderName:p.uploaderName||r.uploadedBy||r.uploaded_by||"Team member"}); };';
+    appJs = replaceConst(appJs, 'mapPhoto', wrapper) || appJs;
+  }
+
   if (appJs.indexOf('function gate(') >= 0) {
-    appJs = replaceFunction(appJs, 'showLogin', NEW_SHOWLOGIN) || appJs;
+    appJs = patchFunction(appJs, 'showLogin', NEW_SHOWLOGIN) || appJs;
+    log('sign in screen replaced');
   } else {
     log('sign in screen helper not found, the original sign in screen is kept');
   }
@@ -486,24 +505,24 @@ async function main() {
   if (sortedFn) {
     const renamed = sortedFn.text.replace('function sortedSites', 'function __sortedSitesOrig');
     const wrapper =
-      `function sortedSites(){` +
-      ` const zone=(S.region||'all');` +
-      ` const keep=S.sites.filter(function(s){ return zone==='all'||!s.region||s.region===zone; });` +
-      ` const all=S.sites; S.sites=keep;` +
-      ` try{ return (` + renamed + `)(); } finally { S.sites=all; }` +
-      `}`;
+      'function sortedSites(){' +
+      ' const zone=(S.region||"all");' +
+      ' const keep=S.sites.filter(function(s){ return zone==="all"||!s.region||s.region===zone; });' +
+      ' const all=S.sites; S.sites=keep;' +
+      ' try{ return (' + renamed + ')(); } finally { S.sites=all; }' +
+      '}';
     appJs = replaceFunction(appJs, 'sortedSites', wrapper) || appJs;
   } else {
-    const sortedConst = findConst(appJs, 'sortedSites');
+    const sortedConst = findAssignment(appJs, 'sortedSites');
     if (sortedConst) {
       const value = appJs.slice(sortedConst.eq, sortedConst.end);
       const wrapper =
-        `const sortedSites=function(){` +
-        ` const zone=(S.region||'all');` +
-        ` const keep=S.sites.filter(function(s){ return zone==='all'||!s.region||s.region===zone; });` +
-        ` const all=S.sites; S.sites=keep;` +
-        ` try{ return (` + value + `)(); } finally { S.sites=all; }` +
-        `};`;
+        'const sortedSites=function(){' +
+        ' const zone=(S.region||"all");' +
+        ' const keep=S.sites.filter(function(s){ return zone==="all"||!s.region||s.region===zone; });' +
+        ' const all=S.sites; S.sites=keep;' +
+        ' try{ return (' + value + ')(); } finally { S.sites=all; }' +
+        '};';
       appJs = replaceConst(appJs, 'sortedSites', wrapper) || appJs;
     }
   }
@@ -513,13 +532,14 @@ async function main() {
     const brace = appJs.indexOf('{', bootAt);
     const end = findBlock(appJs, brace, '{', '}');
     const parenAt = appJs.lastIndexOf('(', bootAt);
-    const between = appJs.slice(parenAt + 1, bootAt);
-    if (between.indexOf('function boot') >= 0 && appJs.slice(end, end + 5) === '})();') {
-      appJs = appJs.slice(0, parenAt) + NEW_BOOT + appJs.slice(end + 5);
+    if (appJs.slice(end, end + 4) === ')();' && parenAt > 0) {
+      appJs = appJs.slice(0, parenAt) + NEW_BOOT + appJs.slice(end + 4);
       log('sign in flow replaced');
     } else {
       log('could not rewrite the start up block');
     }
+  } else {
+    log('start up block not found');
   }
 
   const lastEnd = appJs.lastIndexOf('})();');
