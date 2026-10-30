@@ -1,0 +1,100 @@
+/* Multi zone platform theme layer */
+
+.zonebar {
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+  background: linear-gradient(90deg, #1b1035 0%, #3b1d6e 45%, #6d3df5 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 34px rgba(20, 8, 48, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.zonebar .zb-inner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 22px;
+  flex-wrap: wrap;
+}
+
+.zonebar .zb-title {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.78;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.zonebar .zb-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.zonebar .zb-pill {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  padding: 7px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  font-family: inherit;
+}
+
+.zonebar .zb-pill:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.zonebar .zb-pill.on {
+  background: #ffffff;
+  color: #3b1d6e;
+  border-color: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.zonebar .zb-count {
+  margin-left: auto;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px 13px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.gate-card {
+  border-radius: 20px !important;
+  box-shadow: 0 30px 70px rgba(16, 8, 40, 0.3) !important;
+}
+
+.gate-sub {
+  color: #5b6076;
+}
+
+.gate-foot {
+  font-size: 12px;
+  color: #7c819a;
+  line-height: 1.6;
+}
+
+.zone-tag {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #6d3df5;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}

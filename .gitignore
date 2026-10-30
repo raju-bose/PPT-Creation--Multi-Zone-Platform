@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+.env
+.env.local
+.vercel
+.cache
+next-env.d.ts
+*.tsbuildinfo
+public/platform.html
+public/assets/app.js
+public/assets/legacy.css
+public/assets/bhf141.template.json
+public/assets/folders.json
