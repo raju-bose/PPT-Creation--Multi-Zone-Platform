@@ -137,7 +137,7 @@ export async function loadTemplate(req: Request): Promise<any> {
 
 export function folderList(rules: any, layout: string): any[] {
   if (!rules) return [];
-  const key = String(layout || '2DU2T');
+  const key = String(layout || '2DU2T').split(':')[0];
   const entry = rules[key] || rules['2DU2T'];
   if (!entry) return [];
   return entry.folders || [];

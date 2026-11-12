@@ -78,7 +78,7 @@ const TOOLS = [
   {
     name: 'create_site',
     description:
-      'Create a site folder with the standard sub folders for its layout (34 folders for 1DU2T and 2DU2T, 45 for 3DU3T).',
+      'Create a site folder with the standard sub folders for its layout (34 folders for 1DU2T and 2DU2T, 45 for 3DU3T, 44 for 4DU2T, 50 for 4DU3T).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -86,7 +86,7 @@ const TOOLS = [
         name: { type: 'string' },
         state: { type: 'string' },
         region: { type: 'string', description: 'north or east' },
-        layout: { type: 'string', description: '1DU2T, 2DU2T or 3DU3T. Defaults to 2DU2T.' },
+        layout: { type: 'string', description: '1DU2T, 2DU2T, 3DU3T, 4DU2T or 4DU3T. Defaults to 2DU2T.' },
         address: { type: 'string' },
         latlong: { type: 'string' },
       },

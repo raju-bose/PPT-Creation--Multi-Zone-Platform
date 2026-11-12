@@ -29,6 +29,7 @@ The shared password can be changed with the `ADMIN_PASSWORD` environment variabl
 
 | Path | What it is |
 | --- | --- |
+| `scripts/four-du.mjs` | Runs after the front end build and adds the 4 DU layouts (4DU2T, 4DU3T): OPT 5 to 8, DU JB 3 and 4, DU 3 and 4 sump sensors |
 | `scripts/build-front-end.mjs` | Builds the front end from the original app, pulls out the slide template and folder rules, swaps the Apps Script calls for the platform API and adds the zone switcher |
 | `src/app/api/app/route.ts` | The platform API. Sign in, site list, uploads, photo files, Excel export |
 | `src/app/api/mcp/route.ts` | The MCP server that Claude connects to |
@@ -98,7 +99,7 @@ The server exposes these tools:
 | `list_sites` | Every site with its upload progress |
 | `get_site` | One site in full: every sub folder, who uploaded it, what is still open |
 | `get_checklist` | Checklist rows for the PPT pack, filterable by zone and status |
-| `create_site` | Creates a site folder with the standard 34 sub folders (45 for a 3DU3T layout) |
+| `create_site` | Creates a site folder with the standard 34 sub folders (45 for 3DU3T, 44 for 4DU2T, 50 for 4DU3T) |
 | `upload_photo` | Stores a photo into a sub folder from a URL or base64 |
 | `list_photos` | Photos for a site with signed links so they can be viewed |
 | `pending_uploads` | Site folders still missing photos, least complete first |
