@@ -457,7 +457,7 @@ function dialog(siteId){
 async function prepare(site,opts){
   toast("Reading serial numbers…");
   try{ await load(site); }catch(e){}
-  try{ const r=await call("pptGenerated",{id:site.id,dprStart:(opts&&opts.dpr)||""}); if(r&&r.meta) Object.assign(site,r.meta); }
+  try{ const r=await call("pptGenerated",{id:site.id,dprStart:(opts&&opts.dpr)||""}); if(r&&r.meta){ Object.assign(site,r.meta); decorate(); } }
   catch(e){ toast("Could not record this PPT in the history: "+errText(e)); }
 }
 
@@ -532,6 +532,7 @@ function pickSite(){
   document.getElementById("m-cancel").onclick=closeModal;
   const q=document.getElementById("af-pq");
   q.oninput=()=>{ const v=q.value.trim().toLowerCase(); document.querySelectorAll("#af-picks .af-pick").forEach(b=>{ b.hidden=!!v&&!b.getAttribute("data-q").includes(v); }); };
+  q.addEventListener("keydown",e=>{ if(e.key!=="Enter") return; e.preventDefault(); const f=[...document.querySelectorAll("#af-picks .af-pick")].find(x=>!x.hidden); if(f) pptDialog(f.getAttribute("data-af-ppt")); });
 }
 /* runs after every screen update: a Generate button on each site row, and a floating one inside a site */
 function decorate(){
@@ -549,7 +550,8 @@ function decorate(){
       fab.innerHTML=PPT_ICON+'<span><b>Generate PPT</b><small>'+esc(site.code)+' · '+(left? left+' photo place'+(left>1?"s":"")+' empty' : 'all photos in')+'</small></span>';
       fab.hidden=false;
     } else if(fab) fab.hidden=true;
-  }catch(e){}
+    board(); ready(site); steps(); findButton(); liveChip();
+  }catch(e){ console.error(e); }
 }
 document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-af-ppt]"); if(!b) return; e.preventDefault(); e.stopPropagation(); pptDialog(b.getAttribute("data-af-ppt")); },true);
 try{ const ra=renderAll; renderAll=function(){ const r=ra.apply(this,arguments); decorate(); return r; }; }catch(e){}
@@ -560,6 +562,143 @@ function heroButton(){
   if(!b){ b=document.createElement("button"); b.type="button"; b.className="btn af-heroppt"; b.id="qa-ppt"; b.innerHTML=PPT_ICON+"Generate PPT"; b.addEventListener("click",pickSite); qa.appendChild(b); }
   b.style.display=S.canPPT? "" : "none";
 }
+/* ---------- what a site still needs before its PPT ---------- */
+const RING=(pct,sz)=>{ const r=sz/2-5, c=2*Math.PI*r; return '<svg class="af-ring" width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'" aria-hidden="true"><circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="6"/><circle cx="'+sz/2+'" cy="'+sz/2+'" r="'+r+'" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-dasharray="'+(c*pct/100).toFixed(1)+' '+c.toFixed(1)+'" transform="rotate(-90 '+sz/2+' '+sz/2+')"/><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-size="'+Math.round(sz*0.26)+'" font-weight="700" fill="currentColor">'+pct+'%</text></svg>'; };
+const folderOf=(site,t)=>(site.subfolders||[]).find(f=>tplName(f.name)===t)||null;
+function emptyFolders(site){
+  const st=siteStats(site);
+  return st.folders.filter(f=>{ if((st.byF[f.id]||[]).length) return false; const t=tplName(f.name), i=t? FINFO[t] : null;
+    return !((i && (i.table || i.opt || !inLayout(site,t))) || OLD_HDD.test(normF(f.name))); });
+}
+function excelState(site){
+  if(!fileKey(site)) return {ok:false,text:"No serial-number Excel yet",sub:"Upload it to 14.1 Device Serial Numbers – the tables are filled from it automatically."};
+  const st=store[site.id];
+  if(!st || st.key!==fileKey(site) || st.data===undefined){ load(site).then(()=>{ if(S.siteId===site.id) decorate(); }).catch(()=>{}); return {ok:true,text:"Reading the serial-number Excel…",sub:""}; }
+  if(!st.data) return {ok:false,text:"The Excel could not be read",sub:"It needs the columns MATERIAL, MAKE, MODEL, SERIAL NO."};
+  const d=st.data.devices.filter(x=>x.serial).length, c=st.data.cams.filter(x=>x.serial).length;
+  return {ok:true,data:true,text:"Serial numbers read automatically",sub:d+" device serial number"+(d===1?"":"s")+" · "+c+" camera"+(c===1?"":"s")+" from "+st.files.join(", ")};
+}
+/* the readiness card at the top of a site */
+function ready(site){
+  const body=document.getElementById("folders-body"); const old=document.getElementById("af-ready");
+  if(!site || S.folderId || !body){ if(old) old.remove(); return; }
+  const st=siteStats(site), miss=emptyFolders(site), ex=excelState(site);
+  const n=t=>{ const f=folderOf(site,t); return f? (st.byF[f.id]||[]).length : 0; };
+  const fid=t=>{ const f=folderOf(site,t); return f? f.id : ""; };
+  const item=(ok,title,sub,folder,extra)=>'<div class="af-chk '+(ok?"ok":"no")+'"><i>'+(ok?"✓":"!")+'</i><div><b>'+esc(title)+'</b><span>'+esc(sub)+'</span></div>'+(extra||"")+(folder&&!ok? '<button type="button" class="af-mini" data-af-open="'+esc(folder)+'">Open folder</button>' : "")+'</div>';
+  const html='<div class="af-ready-top"><div class="af-ready-ring '+(st.pct===100?"full":"")+'">'+RING(st.pct,84)+'</div>'+
+    '<div class="af-ready-head"><h3>'+(st.pct===100&&ex.ok? "Ready for the PPT" : "PPT readiness")+'</h3><p>'+st.done+' of '+st.total+' photo places filled'+(miss.length? ' · '+miss.length+' still empty' : '')+(site.pptUpdatedAt? ' · last PPT '+fmtDate(site.pptUpdatedAt)+' by '+esc(site.pptUpdatedBy||"—") : ' · no PPT generated yet')+'</p></div>'+
+    '<div class="af-ready-act">'+(ex.data? '<button type="button" class="btn" data-af-data="'+esc(site.id)+'">View Excel data</button>' : '')+(S.canPPT? '<button type="button" class="btn pri" data-af-ppt="'+esc(site.id)+'">'+PPT_ICON+' Generate PPT</button>' : '')+'</div></div>'+
+    '<div class="af-chks">'+
+      item(!miss.length,"Site photos",miss.length? miss.length+" photo place"+(miss.length>1?"s":"")+" still empty" : "Every photo place has a photo")+
+      item(ex.ok,ex.text,ex.sub,fid(SERIAL_F))+
+      item(n(CLEAR_F)>0,"Clearance mails",n(CLEAR_F)? n(CLEAR_F)+" file"+(n(CLEAR_F)>1?"s":"")+" uploaded" : "No clearance mail uploaded yet",fid(CLEAR_F))+
+      item(n(CHECK_F)>0,"Checklist",n(CHECK_F)? n(CHECK_F)+" file"+(n(CHECK_F)>1?"s":"")+" uploaded" : "No checklist uploaded yet",fid(CHECK_F))+
+      item(!!site.address,"Cover page address",site.address? "Set" : "Not set – use “Site details from file”")+
+    '</div>'+
+    (miss.length? '<div class="af-next"><span>Upload next:</span>'+miss.slice(0,8).map(f=>'<button type="button" class="af-chip" data-af-open="'+esc(f.id)+'">'+esc(f.name)+'</button>').join("")+(miss.length>8? '<em>+'+(miss.length-8)+' more</em>' : '')+'</div>' : '');
+  let box=old; if(!box){ box=document.createElement("div"); box.id="af-ready"; box.className="af-ready"; }
+  const head=body.querySelector(".sec-h");
+  if(head){ if(box.previousElementSibling!==head) head.insertAdjacentElement("afterend",box); } else if(!box.parentNode) body.prepend(box);
+  if(box.__h!==html){ box.innerHTML=html; box.__h=html; }
+}
+/* what was read from the Excel – so it can be checked before the PPT is made */
+function dataModal(siteId){
+  const site=S.sites.find(x=>x.id===siteId), st=site&&store[site.id], D=st&&st.data; if(!D){ toast("No Excel data for this site yet."); return; }
+  const th='style="text-align:left;padding:6px 9px;position:sticky;top:0;background:var(--surface,#fff);border-bottom:1px solid var(--line,#d9dee7);white-space:nowrap"', td='style="padding:5px 9px;border-bottom:1px solid var(--line,#e6e9ef)"';
+  const tbl=(heads,rows)=>'<div style="max-height:30vh;overflow:auto;border:1px solid var(--line,#d9dee7);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>'+heads.map(h=>'<th '+th+'>'+h+'</th>').join("")+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td '+td+'>'+esc(c||"—")+'</td>').join("")+'</tr>').join("")+'</tbody></table></div>';
+  modal('<h3>Data read from the Excel</h3><p>'+esc(st.files.join(", "))+' · read automatically each time the file changes. These values go into the PPT tables; “—” is shown as “-” in the PPT.</p>'+
+    '<h4 style="margin:8px 0 6px">Devices ('+D.devices.length+')</h4>'+tbl(["Material","Make","Model","Serial No.","IP address"],D.devices.map(d=>[d.name,d.make,d.model,d.serial,d.ip]))+
+    '<h4 style="margin:14px 0 6px">Cameras ('+D.cams.length+')'+(D.nvrIp? ' · NVR '+esc(D.nvrIp) : '')+'</h4>'+tbl(["No.","Camera name","Make","Model","Serial No.","Camera IP","Gateway"],D.cams.map(c=>[String(c.no),c.name,c.make,c.model,c.serial,c.ip,c.gw]))+
+    '<div class="btns" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn pri" id="m-cancel">Close</button></div>',async()=>{});
+  wide(); document.getElementById("m-cancel").onclick=closeModal;
+}
+/* dashboard: one card per site with what it needs and a Generate button */
+function board(){
+  const main=document.getElementById("dash-main"); if(!main) return;
+  let box=document.getElementById("af-board");
+  const sites=zoneSites();
+  if(!sites.length){ if(box) box.remove(); return; }
+  const rows=sites.map(s=>({s,st:siteStats(s)})).sort((a,b)=>b.st.pct-a.st.pct||b.st.last-a.st.last);
+  const show=rows.slice(0,8);
+  const html='<div class="af-board-h"><div><h3>PPT status by site</h3><p>Updates by itself as photos and files arrive.</p></div>'+(rows.length>show.length? '<button type="button" class="btn" data-af-find="1">All '+rows.length+' sites</button>' : '')+'</div><div class="af-cards">'+
+    show.map(({s,st})=>{ const xl=!!fileKey(s), left=st.total-st.done;
+      return '<div class="af-card"><div class="af-card-top"><div class="af-card-ring '+(st.pct===100?"full":"")+'">'+RING(st.pct,56)+'</div><div class="af-card-nm"><b>'+esc(s.code)+'</b><span>'+esc(s.name)+'</span></div></div>'+
+        '<div class="af-tags"><span class="af-tag '+(left?"warn":"good")+'">'+(left? left+' photo place'+(left>1?"s":"")+' empty' : 'Photos complete')+'</span><span class="af-tag '+(xl?"good":"bad")+'">'+(xl? 'Excel uploaded' : 'No Excel')+'</span></div>'+
+        '<div class="af-card-last">'+(s.pptUpdatedAt? 'Last PPT '+fmtDate(s.pptUpdatedAt)+' · '+esc(s.pptUpdatedBy||"") : 'No PPT generated yet')+'</div>'+
+        '<div class="af-card-btns"><button type="button" class="btn" data-af-site="'+esc(s.id)+'">Open</button>'+(S.canPPT? '<button type="button" class="btn pri" data-af-ppt="'+esc(s.id)+'">Generate PPT</button>' : '')+'</div></div>'; }).join("")+'</div>';
+  if(!box){ box=document.createElement("div"); box.id="af-board"; box.className="panel af-board"; main.insertBefore(box,main.firstChild); }
+  if(box.__h!==html){ box.innerHTML=html; box.__h=html; }
+}
+/* the three numbered steps on the dashboard become shortcuts */
+function steps(){
+  document.querySelectorAll(".steps .step").forEach((el,i)=>{ if(el.__af) return; el.__af=1; el.classList.add("af-step"); el.setAttribute("role","button"); el.tabIndex=0;
+    const go=()=>{ if(i===0) setView("folders"); else if(i===1){ const b=document.getElementById("qa-upload"); if(b) b.click(); } else if(S.canPPT) pickSite(); else toast("Only the PPT team can generate the PPT."); };
+    el.addEventListener("click",go); el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } }); });
+}
+/* quick search: Ctrl+K or the search button → jump to any site, or generate its PPT */
+function findSite(){
+  const sites=zoneSites(); if(!sites.length){ toast("No site folders yet."); return; }
+  const row=s=>{ const st=siteStats(s);
+    return '<div class="af-pick" data-q="'+esc((s.code+" "+s.name+" "+(s.state||"")).toLowerCase())+'"><button type="button" class="af-pick-open" data-af-site="'+esc(s.id)+'"><span class="af-pick-main"><b>'+esc(s.code)+'</b> '+esc(s.name)+'<small>'+esc(s.state||"")+(s.state?" · ":"")+st.done+' of '+st.total+' photo places filled</small></span><span class="af-pick-pct'+(st.pct===100?' full':'')+'">'+st.pct+'%</span></button>'+
+      (S.canPPT? '<button type="button" class="af-pick-go" data-af-ppt="'+esc(s.id)+'">'+PPT_ICON+'Generate</button>' : '')+'</div>'; };
+  modal('<h3>Find a site</h3><div class="fld"><input id="af-pq" type="search" placeholder="Type a site code, name or state" aria-label="Search sites" autocomplete="off"></div>'+
+    '<div class="af-picks" id="af-picks">'+sites.slice().sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(row).join("")+'</div>'+
+    '<p style="font-size:12px;margin:10px 0 0">Enter opens the first match · Ctrl + K opens this search from anywhere.</p>',async()=>{});
+  const q=document.getElementById("af-pq");
+  q.addEventListener("keydown",e=>{ if(e.key!=="Enter") return; e.preventDefault(); const f=[...document.querySelectorAll("#af-picks .af-pick")].find(x=>!x.hidden); if(f){ const id=f.querySelector("[data-af-site]").getAttribute("data-af-site"); closeModal(); openSite(id); } });
+  q.oninput=()=>{ const v=q.value.trim().toLowerCase(); document.querySelectorAll("#af-picks .af-pick").forEach(b=>{ b.hidden=!!v&&!b.getAttribute("data-q").includes(v); }); };
+  q.focus();
+}
+function findButton(){
+  if(document.getElementById("af-find")) return; const th=document.getElementById("b-theme"); if(!th) return;
+  const b=document.createElement("button"); b.type="button"; b.id="af-find"; b.className=th.className; b.title="Find a site (Ctrl + K)"; b.setAttribute("aria-label","Find a site");
+  b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+  b.addEventListener("click",e=>{ e.stopPropagation(); findSite(); }); th.parentNode.insertBefore(b,th);
+}
+document.addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&String(e.key).toLowerCase()==="k"){ const app=document.getElementById("app"); if(app&&!app.hidden){ e.preventDefault(); findSite(); } } });
+document.addEventListener("click",e=>{ const t=e.target.closest&&e.target.closest("[data-af-site],[data-af-open],[data-af-data],[data-af-find]"); if(!t) return; e.preventDefault(); e.stopPropagation();
+  if(t.hasAttribute("data-af-find")){ findSite(); return; }
+  if(t.hasAttribute("data-af-data")){ dataModal(t.getAttribute("data-af-data")); return; }
+  if(t.hasAttribute("data-af-open")){ openSite(S.siteId,t.getAttribute("data-af-open")); return; }
+  closeModal(); openSite(t.getAttribute("data-af-site")); },true);
+
+/* ---------- data stays fresh by itself: live chip, refresh when the tab comes back ---------- */
+let lastSync=0, syncing=false;
+try{ const rf=refresh; refresh=async function(){ syncing=true; liveChip(); try{ return await rf.apply(this,arguments); } finally{ syncing=false; if(S.dbState==="ok") lastSync=Date.now(); liveChip(); } }; }catch(e){}
+function liveChip(){
+  const bar=document.querySelector(".zonebar .zb-inner"); if(!bar) return;
+  let c=document.getElementById("af-live");
+  if(!c){ c=document.createElement("button"); c.type="button"; c.id="af-live"; c.className="af-live"; c.title="Data refreshes by itself every 20 seconds. Click to refresh now.";
+    c.addEventListener("click",()=>{ refresh(true); }); const cnt=bar.querySelector(".zb-count"); if(cnt) bar.insertBefore(c,cnt); else bar.appendChild(c); }
+  const app=document.getElementById("app"); c.hidden=!app||app.hidden;
+  const off=S.dbState&&S.dbState!=="ok", sec=lastSync? Math.round((Date.now()-lastSync)/1000) : -1;
+  c.className="af-live"+(off?" off":"")+(syncing?" busy":"");
+  c.innerHTML='<i></i>'+(off? "Offline – retrying" : syncing&&sec<0? "Loading…" : sec<0? "Live" : sec<8? "Live · updated just now" : sec<90? "Live · updated "+sec+" s ago" : "Live · updated "+Math.round(sec/60)+" min ago");
+}
+setInterval(liveChip,5000);
+document.addEventListener("visibilitychange",()=>{ const app=document.getElementById("app"); if(!document.hidden && app && !app.hidden && Date.now()-lastSync>8000) refresh(); });
+window.addEventListener("online",()=>{ const app=document.getElementById("app"); if(app&&!app.hidden) refresh(true); });
+
+/* ---------- progress card while the PPT is built ---------- */
+let progT=0;
+function progress(step,pct,state){
+  let p=document.getElementById("af-prog");
+  if(!p){ p=document.createElement("div"); p.id="af-prog"; p.className="af-prog"; p.setAttribute("role","status"); document.body.appendChild(p); }
+  p.className="af-prog"+(state? " "+state : "");
+  p.innerHTML='<div class="af-prog-t"><b>'+(state==="done"? "PPT ready" : state==="bad"? "PPT not built" : "Building the PPT")+'</b><span>'+esc(step)+'</span></div><div class="af-prog-bar'+(pct<0?" run":"")+'"><i style="width:'+(pct<0?40:Math.max(4,pct))+'%"></i></div>';
+  p.hidden=false; clearTimeout(progT);
+  progT=setTimeout(()=>{ p.hidden=true; },state? (state==="bad"?9000:6000) : 300000);
+}
+try{ const t0=toast; toast=function(msg){ const m=String(msg); let x;
+    if(/^Reading serial numbers/.test(m)){ progress("Reading the serial-number Excel",5); return; }
+    if((x=m.match(/^Reading (.+?) …$/))){ progress("Reading "+x[1],12); return; }
+    if((x=m.match(/^Building PPT… (\d+) \/ (\d+) photos/))){ const a=+x[1], b=+x[2]; if(!b) progress("Writing the slides",-1); else if(a>=b) progress("All "+b+" photos loaded – writing the slides",-1); else progress("Loading photos · "+a+" of "+b,b? 15+Math.round(75*a/b) : 50); return; }
+    const p=document.getElementById("af-prog"), on=p&&!p.hidden&&!/done|bad/.test(p.className);
+    if(/^PPT ready/.test(m)){ progress(m.replace(/^PPT ready · /,"")+" · saved to your downloads",100,"done"); return; }
+    if(on && /^Could not build the PPT/.test(m)){ progress(m.replace(/^Could not build the PPT: /,""),100,"bad"); return; }
+    return t0.apply(this,arguments); }; }catch(e){}
+
 function signedOut(){ try{ fetch("/api/app",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})}).catch(()=>{}); }catch(e){} }
 return {variant,prepare,dialog,menu,role,signedOut,historyModal,parseBook,fillPages,finder,_store:store};
 })();

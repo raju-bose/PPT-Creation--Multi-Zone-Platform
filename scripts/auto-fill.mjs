@@ -49,6 +49,8 @@ for (const [from, to] of PATCHES) {
   app = app.replace(from, () => to); ok++;
 }
 if (ok !== PATCHES.length) { log('Only ' + ok + ' of ' + PATCHES.length + ' changes fit the front end. Stopping the build.'); process.exit(1); }
+// the data lives on the platform server now, not in a Google Sheet
+app = app.split('from the Google Sheet').join('from the server');
 // the front end is one closure: the module goes inside it, just before it closes
 const end = app.lastIndexOf('})();');
 if (end < 0) { log('The end of the front end was not found. Stopping the build.'); process.exit(1); }
