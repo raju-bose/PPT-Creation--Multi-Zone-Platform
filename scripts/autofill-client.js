@@ -511,6 +511,54 @@ function role(){
     b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>History</span>';
     b.addEventListener("click",e=>{ e.preventDefault(); e.stopPropagation(); historyModal(); }); nav.appendChild(b); }
   b.style.display=S.canEdit? "" : "none";
+  heroButton(); decorate();
+}
+/* ---------- easy ways to the Generate PPT dialog ---------- */
+const PPT_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M10 8.5v3l3-1.5z"/></svg>';
+function zoneSites(){ return S.sites.filter(s=>!S.region||S.region==="all"||(s.region||"east")===S.region); }
+/* choose the site first, then the normal Generate PPT dialog opens */
+function pickSite(){
+  if(!S.canPPT){ toast("Only the PPT team can generate the PPT."); return; }
+  const sites=zoneSites();
+  if(!sites.length){ toast("Create a site folder first."); return; }
+  if(sites.length===1){ pptDialog(sites[0].id); return; }
+  const row=s=>{ const st=siteStats(s), left=st.total-st.done;
+    return '<button type="button" class="af-pick" data-af-ppt="'+esc(s.id)+'" data-q="'+esc((s.code+" "+s.name+" "+(s.state||"")).toLowerCase())+'"><span class="af-pick-main"><b>'+esc(s.code)+'</b> '+esc(s.name)+'<small>'+(left? left+' of '+st.total+' photo places still empty' : 'All '+st.total+' photo places filled')+'</small></span>'+
+      '<span class="af-pick-pct'+(st.pct===100?' full':'')+'">'+st.pct+'%</span><span class="af-pick-go">'+PPT_ICON+'Generate</span></button>'; };
+  modal('<h3>Generate PPT</h3><p>Choose the site. Sites with every photo place filled are listed first.</p>'+
+    '<div class="fld"><input id="af-pq" type="search" placeholder="Search site code or name" aria-label="Search sites"></div>'+
+    '<div class="af-picks" id="af-picks">'+sites.slice().sort((a,b)=>siteStats(b).pct-siteStats(a).pct||String(a.code).localeCompare(String(b.code))).map(row).join("")+'</div>'+
+    '<div class="btns" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn" id="m-cancel">Cancel</button></div>',async()=>{});
+  document.getElementById("m-cancel").onclick=closeModal;
+  const q=document.getElementById("af-pq");
+  q.oninput=()=>{ const v=q.value.trim().toLowerCase(); document.querySelectorAll("#af-picks .af-pick").forEach(b=>{ b.hidden=!!v&&!b.getAttribute("data-q").includes(v); }); };
+}
+/* runs after every screen update: a Generate button on each site row, and a floating one inside a site */
+function decorate(){
+  try{
+    document.querySelectorAll("#tbody button.link[data-open-site]").forEach(b=>{
+      if(!S.canPPT || b.parentNode.querySelector(".af-rowppt")) return;
+      const g=document.createElement("button"); g.type="button"; g.className="af-rowppt"; g.setAttribute("data-af-ppt",b.getAttribute("data-open-site")); g.innerHTML=PPT_ICON+"Generate PPT";
+      b.parentNode.style.whiteSpace="nowrap"; b.parentNode.appendChild(g); });
+    let fab=document.getElementById("af-fab");
+    const site=S.view==="folders"&&S.siteId? S.sites.find(s=>s.id===S.siteId) : null;
+    if(site && S.canPPT){
+      if(!fab){ fab=document.createElement("button"); fab.type="button"; fab.id="af-fab"; fab.className="af-fab"; document.body.appendChild(fab); }
+      const st=siteStats(site), left=st.total-st.done;
+      fab.setAttribute("data-af-ppt",site.id);
+      fab.innerHTML=PPT_ICON+'<span><b>Generate PPT</b><small>'+esc(site.code)+' · '+(left? left+' photo place'+(left>1?"s":"")+' empty' : 'all photos in')+'</small></span>';
+      fab.hidden=false;
+    } else if(fab) fab.hidden=true;
+  }catch(e){}
+}
+document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-af-ppt]"); if(!b) return; e.preventDefault(); e.stopPropagation(); pptDialog(b.getAttribute("data-af-ppt")); },true);
+try{ const ra=renderAll; renderAll=function(){ const r=ra.apply(this,arguments); decorate(); return r; }; }catch(e){}
+try{ const sv=setView; setView=function(){ const r=sv.apply(this,arguments); decorate(); return r; }; }catch(e){}
+function heroButton(){
+  const qa=document.querySelector(".hero .qa"); if(!qa) return;
+  let b=document.getElementById("qa-ppt");
+  if(!b){ b=document.createElement("button"); b.type="button"; b.className="btn af-heroppt"; b.id="qa-ppt"; b.innerHTML=PPT_ICON+"Generate PPT"; b.addEventListener("click",pickSite); qa.appendChild(b); }
+  b.style.display=S.canPPT? "" : "none";
 }
 function signedOut(){ try{ fetch("/api/app",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({action:"logout"})}).catch(()=>{}); }catch(e){} }
 return {variant,prepare,dialog,menu,role,signedOut,historyModal,parseBook,fillPages,finder,_store:store};

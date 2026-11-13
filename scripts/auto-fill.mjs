@@ -37,7 +37,7 @@ const PATCHES = [
   ['function signOut(msg){\n  stopPolling();', 'function signOut(msg){\n  AF.signedOut(); stopPolling();'],
   ['Site engineer · photo upload', 'Photo upload'],
   ['<p class="gate-foot">Shared access for every user: ID <b>Admin</b>, password <b>Admin@2026</b>. Your ID is recorded against every photo you upload.</p>',
-   '<p class="gate-foot"><b>PPT team</b> (create folders, generate the PPT): sign in with your own name and your own password.<br><b>Photo upload</b>: ID <b>Admin</b>, password <b>Admin@2026</b>. Every sign-in is recorded in the access history.</p>'],
+   '<div class="gate-how"><div><b>PPT team</b><span>Your own name and your own password. Create folders and generate the PPT.</span></div><div><b>Photo upload</b><span>ID <b>Admin</b>, password <b>Admin@2026</b>. Upload photos and files.</span></div></div><p class="gate-foot">Every sign-in is recorded in the access history.</p>'],
 ];
 
 let app = fs.readFileSync(appPath, 'utf8');
