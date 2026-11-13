@@ -29,15 +29,22 @@ const PATCHES = [
   ['S.canEdit = r.role==="admin" && isPptName(S.myName); S.canPPT = S.canEdit; applyRole();',
    'S.canEdit = r.role==="admin"; S.canPPT = S.canEdit; S.isOwner = !!r.owner; if(r.me) S.myName = r.me; applyRole();'],
   ['function applyRole(){ const q=$("#qa-new"); if(q) q.style.display=S.canEdit?"":"none"; }',
-   'function applyRole(){ const q=$("#qa-new"); if(q) q.style.display=S.canEdit?"":"none"; AF.role(); }'],
+   'function applyRole(){ const q=$("#qa-new"); if(q) q.style.display=""; AF.role(); }'],
+  // every signed-in user can create a site folder; editing, deleting and the PPT stay with the PPT team
+  ['if(!S.canEdit){ toast("Only the PPT team can create site folders."); return; }', 'if(!S.canWrite){ toast("Sign in to create site folders."); return; }'],
+  ['(S.canEdit? \'<div class="btns"><button class="btn pri" data-act="new-site"', '(S.canWrite? \'<div class="btns"><button class="btn pri" data-act="new-site"'],
+  ['(S.canEdit&&S.db? \'<button class="card add" data-act="new-site">', '(S.canWrite&&S.db? \'<button class="card add" data-act="new-site">'],
   // account menu: history + own password for the PPT team; the upload name is the login ID
   ['(S.canEdit?\'\':\'<button class="btn" id="um-name">Change my name</button>\')+\'<button class="btn" id="um-sync">Refresh data</button>',
    '(S.canEdit?\'<button class="btn" id="um-hist">Access history</button><button class="btn" id="um-pass">Change my password</button>\':\'\')+\'<button class="btn" id="um-sync">Refresh data</button>'],
   ['$("#um-out").onclick=()=>{ m.hidden=true; signOut(); };', '$("#um-out").onclick=()=>{ m.hidden=true; signOut(); }; AF.menu(m);'],
   ['function signOut(msg){\n  stopPolling();', 'function signOut(msg){\n  AF.signedOut(); stopPolling();'],
-  ['Site engineer · photo upload', 'Photo upload'],
+  ['Site engineer · photo upload', 'Engineer · site folders and photo upload'],
+  // engineers sign in with their own name, so the history shows who it was
+  ["const last=lsGet('sph-name')||'Admin';", "const last=/^admin$/i.test(lsGet('sph-name')||'')? '' : (lsGet('sph-name')||'');"],
+  ['<label for="g-name">Login ID</label><input id="g-name" autocomplete="username" placeholder="Admin">', '<label for="g-name">Your name</label><input id="g-name" autocomplete="username" placeholder="Your full name">'],
   ['<p class="gate-foot">Shared access for every user: ID <b>Admin</b>, password <b>Admin@2026</b>. Your ID is recorded against every photo you upload.</p>',
-   '<div class="gate-how"><div><b>PPT team</b><span>Your own name and your own password. Create folders and generate the PPT.</span></div><div><b>Photo upload</b><span>ID <b>Admin</b>, password <b>Admin@2026</b>. Upload photos and files.</span></div></div><p class="gate-foot">Every sign-in is recorded in the access history.</p>'],
+   '<div class="gate-how"><div><b>PPT team</b><span>Your own name and your own password. Generate the PPT, edit sites.</span></div><div><b>Engineers</b><span>Your own name, password <b>Admin@2026</b>. Create site folders, upload photos and files.</span></div></div><p class="gate-foot">Every sign-in is recorded in the access history.</p>'],
 ];
 
 let app = fs.readFileSync(appPath, 'utf8');

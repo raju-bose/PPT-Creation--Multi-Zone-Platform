@@ -814,3 +814,74 @@ button.af-pick-go:hover {
     bottom: 88px;
   }
 }
+
+/* who was on the site + create login */
+
+.af-recent {
+  margin: 12px 0;
+}
+
+.af-seen {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.af-seen-u {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line, #e3e8ec);
+  border-radius: 12px;
+  padding: 9px 11px;
+}
+
+.af-seen-a {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f9d63, #0b7a4c);
+}
+
+.af-seen-u b {
+  display: block;
+  font-size: 13.5px;
+}
+
+.af-seen-u div span {
+  display: block;
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.af-newuser {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line, #dfe5ea);
+  background: #f5faf7;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.af-newuser input {
+  flex: 1;
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #cfd8dc);
+  border-radius: 9px;
+  font: inherit;
+}
+
+.af-newuser span {
+  font-size: 12px;
+  opacity: 0.7;
+}

@@ -463,7 +463,7 @@ async function prepare(site,opts){
 
 /* ---------- access history + passwords (PPT team) ---------- */
 const WHEN=ms=>ms? new Date(ms).toLocaleString("en-IN",{timeZone:"Asia/Kolkata",day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:true}) : "—";
-const ACT={login:"Signed in",login_failed:"Sign-in refused",open:"Opened the website",logout:"Signed out",ppt:"Generated a PPT",site_created:"Created a site folder",site_deleted:"Deleted a site folder",password:"Password"};
+const ACT={login:"Signed in",login_failed:"Sign-in refused",open:"Opened the website",logout:"Signed out",ppt:"Generated a PPT",site_created:"Created a site folder",site_deleted:"Deleted a site folder",password:"Password",user:"Logins"};
 function wide(){ const f=document.getElementById("mform"); if(f){ f.style.maxWidth="min(96vw,1020px)"; f.style.width="min(96vw,1020px)"; } }
 async function historyModal(){
   modal('<h3>Access history</h3><p>Who signed in or opened the website, and when (India time).</p><div id="af-h">Loading…</div>'+
@@ -474,12 +474,19 @@ async function historyModal(){
     const r=await call("history",{});
     const th='style="text-align:left;padding:7px 10px;position:sticky;top:0;background:var(--surface,#fff);border-bottom:1px solid var(--line,#d9dee7);white-space:nowrap"', td='style="padding:6px 10px;border-bottom:1px solid var(--line,#e6e9ef);vertical-align:top"';
     const users=r.users||[], log=r.log||[];
-    box.innerHTML='<h4 style="margin:6px 0">Last access by user</h4><div style="max-height:26vh;overflow:auto;border:1px solid var(--line,#d9dee7);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th '+th+'>User</th><th '+th+'>Access</th><th '+th+'>Last seen on the website</th>'+(S.isOwner?'<th '+th+'></th>':'')+'</tr></thead><tbody>'+
-      (users.length? users.map(u=>'<tr><td '+td+'><b>'+esc(u.login)+'</b></td><td '+td+'>'+esc(u.role)+(u.owner?" · owner":"")+'</td><td '+td+'>'+esc(WHEN(u.lastSeen))+'</td>'+(S.isOwner?'<td '+td+'>'+(u.role==="PPT team"?'<button type="button" class="btn" data-af-reset="'+esc(u.login)+'" style="padding:3px 9px;font-size:12px">Reset password</button>':'')+'</td>':'')+'</tr>').join("") : '<tr><td '+td+' colspan="4">No one yet.</td></tr>')+
+    box.innerHTML=(S.isOwner? '<div class="af-newuser"><b>Create a PPT team login</b><input id="af-nu" type="text" placeholder="Full name, e.g. Suresh Patil" autocomplete="off" maxlength="60"><button type="button" class="btn pri" id="af-nub">Create login</button><span>The password is made for you and shown once.</span></div>' : '')+
+      '<h4 style="margin:6px 0">Last access by user</h4><div style="max-height:26vh;overflow:auto;border:1px solid var(--line,#d9dee7);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th '+th+'>User</th><th '+th+'>Access</th><th '+th+'>Last seen on the website</th>'+(S.isOwner?'<th '+th+'></th>':'')+'</tr></thead><tbody>'+
+      (users.length? users.map(u=>'<tr><td '+td+'><b>'+esc(u.login)+'</b></td><td '+td+'>'+esc(u.role)+(u.owner?" · owner":"")+(u.active===false?" · switched off":"")+'</td><td '+td+'>'+esc(WHEN(u.lastSeen))+'</td>'+(S.isOwner?'<td '+td+'>'+(u.role==="PPT team"?'<button type="button" class="btn" data-af-reset="'+esc(u.login)+'" style="padding:3px 9px;font-size:12px">Reset password</button>'+(u.owner?'':' <button type="button" class="btn" data-af-active="'+esc(u.login)+'" data-on="'+(u.active===false?0:1)+'" style="padding:3px 9px;font-size:12px">'+(u.active===false?'Switch on':'Switch off')+'</button>'):'')+'</td>':'')+'</tr>').join("") : '<tr><td '+td+' colspan="4">No one yet.</td></tr>')+
       '</tbody></table></div>'+
       '<h4 style="margin:14px 0 6px">Activity <span style="font-weight:400;color:var(--ink-2)">(latest '+log.length+')</span></h4><div style="max-height:38vh;overflow:auto;border:1px solid var(--line,#d9dee7);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th '+th+'>Date &amp; time</th><th '+th+'>User</th><th '+th+'>Access</th><th '+th+'>Activity</th><th '+th+'>Device</th><th '+th+'>IP address</th></tr></thead><tbody>'+
       (log.length? log.map(x=>'<tr><td '+td+' style="white-space:nowrap">'+esc(WHEN(x.at))+'</td><td '+td+'><b>'+esc(x.login)+'</b></td><td '+td+'>'+esc(x.role)+'</td><td '+td+'>'+esc((ACT[x.action]||x.action)+(x.detail&&x.action!=="login"&&x.action!=="open"&&x.action!=="logout"? ": "+x.detail : ""))+'</td><td '+td+'>'+esc(x.device)+'</td><td '+td+'>'+esc(x.ip)+'</td></tr>').join("") : '<tr><td '+td+' colspan="6">Nothing recorded yet.</td></tr>')+
       '</tbody></table></div>';
+    const nub=document.getElementById("af-nub");
+    if(nub) nub.onclick=async()=>{ const nm=document.getElementById("af-nu").value.trim(); if(!nm){ toast("Enter the person’s name."); return; }
+      try{ const x=await call("createUser",{name:nm}); window.prompt("Login created.\nLogin ID: "+x.login+"\nPassword (copy it now – it is shown only once):",x.password); historyModal(); }catch(e){ toast(errText(e)); } };
+    box.querySelectorAll("[data-af-active]").forEach(b=>b.onclick=async()=>{ const who=b.getAttribute("data-af-active"), on=b.getAttribute("data-on")==="1";
+      if(on && !window.confirm("Switch off the login of "+who+"? They will not be able to sign in.")) return;
+      try{ await call("setUserActive",{login:who,active:!on}); historyModal(); }catch(e){ toast(errText(e)); } });
     box.querySelectorAll("[data-af-reset]").forEach(b=>b.onclick=async()=>{ const who=b.getAttribute("data-af-reset");
       if(!window.confirm("Give "+who+" a new password? The old one stops working.")) return;
       try{ const x=await call("resetPassword",{login:who}); window.prompt("New password for "+x.login+" – copy it and give it to them. It is shown only now.",x.password); }catch(e){ toast(errText(e)); } });
@@ -550,7 +557,7 @@ function decorate(){
       fab.innerHTML=PPT_ICON+'<span><b>Generate PPT</b><small>'+esc(site.code)+' · '+(left? left+' photo place'+(left>1?"s":"")+' empty' : 'all photos in')+'</small></span>';
       fab.hidden=false;
     } else if(fab) fab.hidden=true;
-    board(); ready(site); steps(); findButton(); liveChip();
+    board(); recent(); ready(site); steps(); findButton(); liveChip();
   }catch(e){ console.error(e); }
 }
 document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-af-ppt]"); if(!b) return; e.preventDefault(); e.stopPropagation(); pptDialog(b.getAttribute("data-af-ppt")); },true);
@@ -630,6 +637,23 @@ function board(){
   if(!box){ box=document.createElement("div"); box.id="af-board"; box.className="panel af-board"; main.insertBefore(box,main.firstChild); }
   if(box.__h!==html){ box.innerHTML=html; box.__h=html; }
 }
+/* dashboard (PPT team): who signed in or opened the site last – fetched by itself every minute */
+let recentAt=0, recentData=null, recentBusy=false;
+function recent(){
+  const main=document.getElementById("dash-main"); let box=document.getElementById("af-recent");
+  if(!main || !S.canEdit){ if(box) box.remove(); return; }
+  if(!box){ box=document.createElement("div"); box.id="af-recent"; box.className="panel af-recent"; const bd=document.getElementById("af-board"); if(bd) bd.insertAdjacentElement("afterend",box); else main.insertBefore(box,main.firstChild); }
+  if(!recentBusy && Date.now()-recentAt>60000 && S.view==="dash" && !document.hidden){ recentBusy=true;
+    call("history",{limit:40}).then(r=>{ recentData=r; recentAt=Date.now(); }).catch(()=>{ recentAt=Date.now()-30000; }).then(()=>{ recentBusy=false; recent(); }); }
+  const r=recentData; let html;
+  if(!r) html='<div class="af-board-h"><div><h3>Who was on the site</h3><p>Loading…</p></div></div>';
+  else { const seen=(r.log||[]).filter(x=>x.action==="login"||x.action==="open"), last=seen[0];
+    const users=(r.users||[]).filter(u=>u.lastSeen).slice(0,6);
+    html='<div class="af-board-h"><div><h3>Who was on the site</h3><p>'+(last? 'Last sign-in: <b>'+esc(last.login)+'</b> ('+esc(last.role)+') · '+esc(WHEN(last.at))+' · '+esc(last.device||"") : 'No sign-in recorded yet.')+'</p></div><button type="button" class="btn" id="af-rh">Full history</button></div>'+
+      '<div class="af-seen">'+users.map(u=>'<div class="af-seen-u"><span class="af-seen-a">'+esc((u.login[0]||"?").toUpperCase())+'</span><div><b>'+esc(u.login)+'</b><span>'+esc(u.role)+' · '+esc(WHEN(u.lastSeen))+'</span></div></div>').join("")+'</div>'; }
+  if(box.__h!==html){ box.innerHTML=html; box.__h=html; const b=document.getElementById("af-rh"); if(b) b.onclick=historyModal; }
+}
+setInterval(()=>{ if(S.view==="dash" && S.canEdit) recent(); },60000);
 /* the three numbered steps on the dashboard become shortcuts */
 function steps(){
   document.querySelectorAll(".steps .step").forEach((el,i)=>{ if(el.__af) return; el.__af=1; el.classList.add("af-step"); el.setAttribute("role","button"); el.tabIndex=0;

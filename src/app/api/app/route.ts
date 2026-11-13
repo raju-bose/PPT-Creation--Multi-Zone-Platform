@@ -283,14 +283,17 @@ async function login(req: NextRequest, payload: any) {
     return json({ ok: true, user: userOut(sess) }, 200, signSession(sess));
   }
 
-  // everyone else: shared photo-upload access
+  // everyone else (engineers): their own name with the shared password, so the history shows who it was
+  if (/^(admin|administrator|user|test|engineer|guest)$/.test(loginKey(id)) || loginKey(id).length < 3) {
+    return json({ ok: false, error: 'Enter your own name (for example “Suresh Patil”), not “' + id + '”. The password stays Admin@2026.' }, 400);
+  }
   if (password !== adminPassword()) {
     await logAccess(req, id, 'uploader', 'login_failed', 'Wrong password');
     return json({ ok: false, error: 'Wrong access code or session expired. Please sign in again.' }, 401);
   }
   const sess = makeSession(id, 'uploader', false);
   await touchUser(id, 'uploader');
-  await logAccess(req, id, 'uploader', 'login', 'Signed in (photo upload)');
+  await logAccess(req, id, 'uploader', 'login', 'Signed in (engineer)');
   return json({ ok: true, user: userOut(sess) }, 200, signSession(sess));
 }
 
@@ -370,7 +373,7 @@ export async function POST(req: NextRequest) {
       case 'list':
         return json(await list(payload, session), 200, freshCookie);
       case 'createSite': {
-        if (!isPpt) return pptOnly('create site folders');
+        // every signed-in user may create a site folder; generating the PPT stays with the PPT team
         const out = await createSite(payload);
         await logAccess(req, session.name, session.role, 'site_created', out.site.code + ' ' + out.site.name);
         return json(out, 200, freshCookie);
@@ -406,7 +409,23 @@ export async function POST(req: NextRequest) {
       }
       case 'history':
         if (!isPpt) return pptOnly('see the access history');
-        return json(await history(), 200, freshCookie);
+        return json(await history(Number(payload.limit) || 500), 200, freshCookie);
+      case 'createUser': {
+        if (!isPpt || !session.owner) {
+          return json({ ok: false, error: 'Only Raju Bose can create a login.' }, 403);
+        }
+        const out = await createUser(payload);
+        await logAccess(req, session.name, session.role, 'user', 'Created the PPT team login ' + out.login);
+        return json({ ok: true, login: out.login, password: out.password }, 200, freshCookie);
+      }
+      case 'setUserActive': {
+        if (!isPpt || !session.owner) {
+          return json({ ok: false, error: 'Only Raju Bose can switch a login on or off.' }, 403);
+        }
+        const out = await setUserActive(payload, session);
+        await logAccess(req, session.name, session.role, 'user', (out.active ? 'Switched on' : 'Switched off') + ' the login ' + out.login);
+        return json({ ok: true }, 200, freshCookie);
+      }
       case 'changePassword': {
         if (!isPpt) return pptOnly('change a password');
         await changePassword(payload, session);
@@ -609,27 +628,53 @@ async function pptGenerated(payload: any, session: any) {
   };
 }
 
-async function history() {
+async function createUser(payload: any) {
+  const name = String(payload.name || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+  if (name.length < 3) throw new Error('Enter the full name for the login (at least 3 letters).');
+  if (loginKey(name) === 'admin') throw new Error('“Admin” is the shared photo-upload login. Choose the person’s own name.');
+  if (await findPptUser(name)) throw new Error('A PPT team login with that name already exists.');
+  const password = newPassword();
+  const { error } = await sb()
+    .from('app_users')
+    .upsert(
+      { login_id: name, display_name: name, role: 'ppt', pass_hash: hashPassword(password), is_owner: false, active: true, last_seen: 0 },
+      { onConflict: 'login_id' },
+    );
+  if (error) throw new Error(error.message);
+  return { login: name, password };
+}
+
+async function setUserActive(payload: any, session: any) {
+  const member = await findPptUser(String(payload.login || ''));
+  if (!member) throw new Error('That PPT team login was not found.');
+  if (member.login_id === session.name) throw new Error('You cannot switch off your own login.');
+  const active = !!payload.active;
+  const { error } = await sb().from('app_users').update({ active }).eq('login_id', member.login_id);
+  if (error) throw new Error(error.message);
+  return { login: member.login_id, active };
+}
+
+async function history(limit = 500) {
   const s = sb();
   const users = await s.from('app_users').select('login_id, role, is_owner, active, last_seen').order('last_seen', { ascending: false });
   const log = await s
     .from('access_log')
     .select('login_id, role, action, detail, ip, device, at')
     .order('at', { ascending: false })
-    .limit(500);
+    .limit(Math.max(1, Math.min(500, limit)));
   if (log.error) throw new Error(log.error.message);
   return {
     ok: true,
     users: (users.data || []).map((u: any) => ({
       login: u.login_id,
-      role: u.role === 'ppt' ? 'PPT team' : 'Photo upload',
+      role: u.role === 'ppt' ? 'PPT team' : 'Engineer',
       owner: !!u.is_owner,
       active: u.active !== false,
       lastSeen: Number(u.last_seen) || 0,
     })),
     log: (log.data || []).map((r: any) => ({
       login: r.login_id,
-      role: r.role === 'ppt' ? 'PPT team' : 'Photo upload',
+      role: r.role === 'ppt' ? 'PPT team' : 'Engineer',
       action: r.action,
       detail: r.detail || '',
       ip: r.ip || '',

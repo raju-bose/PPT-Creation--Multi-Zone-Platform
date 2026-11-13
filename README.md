@@ -15,9 +15,9 @@ One platform for North Zone and East Zone site photo packs. This replaces the Go
 | Who | Login ID | Password | Can do |
 | --- | --- | --- | --- |
 | PPT team | Their own name (Raju Bose, Mahadev, Avinash, Nayan Nimkar, Vinay Limaye) | Their own password, stored hashed in `app_users` | Create site folders, edit sites, generate the PPT, see the access history |
-| Everyone else | `Admin` (or their own name) | Shared upload password, `ADMIN_PASSWORD`, default `Admin@2026` | Upload photos and files |
+| Engineers | Their own name (`Admin` is not accepted, so the history shows who it was) | Shared password, `ADMIN_PASSWORD`, default `Admin@2026` | Create site folders, upload photos and files |
 
-A PPT team name never works with the shared password. Members change their password from the account menu; the owner (Raju Bose) can reset one from the History page. To add a member, insert a row in `app_users` with `role = 'ppt'` and a hash made by `hashPassword` in `src/lib/core.ts`.
+A PPT team name never works with the shared password. Members change their password from the account menu; the owner (Raju Bose) can reset one from the History page. The owner adds a member, or switches a login off, on the History page.
 
 ## PPT tables from the serial-number Excel
 

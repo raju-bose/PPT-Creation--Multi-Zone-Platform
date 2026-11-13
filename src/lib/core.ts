@@ -67,7 +67,7 @@ export function sessionSecret(): string {
   return process.env.SESSION_SECRET || 'cai-platform-default-secret-change-me';
 }
 
-export const SESSION_VERSION = 2;
+export const SESSION_VERSION = 3;
 
 /** Login IDs are compared without case, spaces or punctuation: "Raju Bose" = "raju.bose" = "RAJUBOSE". */
 export function loginKey(id: unknown): string {
