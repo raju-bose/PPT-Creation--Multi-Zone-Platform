@@ -12,12 +12,22 @@ One platform for North Zone and East Zone site photo packs. This replaces the Go
 
 ## Sign in
 
-| Field | Value |
-| --- | --- |
-| Login ID | `Admin` (any ID works, it is used to record who uploaded) |
-| Password | `Admin@2026` |
+| Who | Login ID | Password | Can do |
+| --- | --- | --- | --- |
+| PPT team | Their own name (Raju Bose, Mahadev, Avinash, Nayan Nimkar, Vinay Limaye) | Their own password, stored hashed in `app_users` | Create site folders, edit sites, generate the PPT, see the access history |
+| Everyone else | `Admin` (or their own name) | Shared upload password, `ADMIN_PASSWORD`, default `Admin@2026` | Upload photos and files |
 
-The shared password can be changed with the `ADMIN_PASSWORD` environment variable.
+A PPT team name never works with the shared password. Members change their password from the account menu; the owner (Raju Bose) can reset one from the History page. To add a member, insert a row in `app_users` with `role = 'ppt'` and a hash made by `hashPassword` in `src/lib/core.ts`.
+
+## PPT tables from the serial-number Excel
+
+`scripts/autofill-client.js` reads the Excel uploaded to **14.1 Device Serial Numbers** (sheet with MATERIAL / MAKE / MODEL / SERIAL NO. / IP ADDRESS, and the CCTV sheet with Camera Name / Camera Sr No / Camera IP / CCTV Gateway / Subnet) and writes the values into every table page: instrument panel, IT rack, AMS, BOS PC, MMS, OPT, locks, EPS, sensors, CCTV inventory, both IP schemes, the consolidated serial list and the port details. A value missing from the Excel is shown as "-", never as the template value.
+
+Page 2 carries the login name of the member who generated the PPT. The created date is the first DPR date (chosen in the Generate dialog, default: the first upload for the site) and the updated date is the day of the last generation.
+
+## Access history
+
+Sign-ins, refused sign-ins, website visits, sign-outs, PPT generations and site folder changes are written to `access_log` and shown to the PPT team under **History**.
 
 ## Stack
 
@@ -29,6 +39,7 @@ The shared password can be changed with the `ADMIN_PASSWORD` environment variabl
 
 | Path | What it is |
 | --- | --- |
+| `scripts/auto-fill.mjs`, `scripts/autofill-client.js` | Run last in the front end build: Excel auto fill of the PPT tables, page 2 history, individual logins and the History page |
 | `scripts/four-du.mjs` | Runs after the front end build and adds the 4 DU layouts (4DU2T, 4DU3T): OPT 5 to 8, DU JB 3 and 4, DU 3 and 4 sump sensors |
 | `scripts/build-front-end.mjs` | Builds the front end from the original app, pulls out the slide template and folder rules, swaps the Apps Script calls for the platform API and adds the zone switcher |
 | `src/app/api/app/route.ts` | The platform API. Sign in, site list, uploads, photo files, Excel export |

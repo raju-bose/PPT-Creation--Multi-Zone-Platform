@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const APP_COOKIE = 'cai_session';
@@ -67,6 +67,42 @@ export function sessionSecret(): string {
   return process.env.SESSION_SECRET || 'cai-platform-default-secret-change-me';
 }
 
+export const SESSION_VERSION = 2;
+
+/** Login IDs are compared without case, spaces or punctuation: "Raju Bose" = "raju.bose" = "RAJUBOSE". */
+export function loginKey(id: unknown): string {
+  return String(id || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 32);
+  return 'scrypt$' + salt.toString('base64url') + '$' + hash.toString('base64url');
+}
+
+export function verifyPassword(password: string, stored: string | null | undefined): boolean {
+  const parts = String(stored || '').split('$');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+  try {
+    const salt = Buffer.from(parts[1], 'base64url');
+    const want = Buffer.from(parts[2], 'base64url');
+    const got = scryptSync(password, salt, want.length);
+    return got.length === want.length && timingSafeEqual(got, want);
+  } catch {
+    return false;
+  }
+}
+
+export function newPassword(): string {
+  const set = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = randomBytes(10);
+  let out = '';
+  for (let i = 0; i < 10; i++) out += set[bytes[i] % set.length];
+  return out;
+}
+
 export function signSession(data: Record<string, unknown>): string {
   const payload = Buffer.from(JSON.stringify(data)).toString('base64url');
   const sig = createHmac('sha256', sessionSecret()).update(payload).digest('base64url');
@@ -84,6 +120,8 @@ export function verifySession(token: string | undefined | null): any {
   try {
     const data = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
     if (data && data.exp && Date.now() > data.exp) return null;
+    // sessions made before individual logins existed carry no version and are signed out
+    if (!data || data.v !== SESSION_VERSION) return null;
     return data;
   } catch {
     return null;

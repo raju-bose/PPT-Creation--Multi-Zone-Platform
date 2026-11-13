@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "prebuild": "node scripts/build-front-end.mjs && node scripts/four-du.mjs",
+    "prebuild": "node scripts/build-front-end.mjs && node scripts/four-du.mjs && node scripts/auto-fill.mjs",
     "build": "next build",
     "start": "next start",
     "dev": "next dev",
-    "predev": "node scripts/build-front-end.mjs && node scripts/four-du.mjs"
+    "predev": "node scripts/build-front-end.mjs && node scripts/four-du.mjs && node scripts/auto-fill.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.47.10",

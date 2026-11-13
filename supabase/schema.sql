@@ -54,3 +54,38 @@ on conflict (id) do nothing;
 alter table app_users enable row level security;
 alter table sites enable row level security;
 alter table photos enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- Individual logins, PPT document history and the access log
+-- ---------------------------------------------------------------------------
+
+-- PPT team members sign in with their own login ID and password (role 'ppt').
+-- Everyone else uses the shared photo-upload access (role 'uploader').
+alter table app_users add column if not exists pass_hash text;
+alter table app_users add column if not exists aliases text[] not null default '{}';
+alter table app_users add column if not exists is_owner boolean not null default false;
+alter table app_users add column if not exists active boolean not null default true;
+alter table app_users alter column role set default 'uploader';
+
+-- Page 2 of the PPT (Document Owners / Change History) is filled from these.
+alter table sites add column if not exists dpr_start text not null default '';
+alter table sites add column if not exists ppt_created_by text not null default '';
+alter table sites add column if not exists ppt_created_at bigint not null default 0;
+alter table sites add column if not exists ppt_updated_by text not null default '';
+alter table sites add column if not exists ppt_updated_at bigint not null default 0;
+
+-- Who opened the website, signed in, generated a PPT, and when.
+create table if not exists access_log (
+  id bigserial primary key,
+  login_id text not null default '',
+  login_key text not null default '',
+  role text not null default '',
+  action text not null default '',
+  detail text not null default '',
+  ip text not null default '',
+  device text not null default '',
+  at bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+create index if not exists access_log_at_idx on access_log (at desc);
+create index if not exists access_log_key_idx on access_log (login_key, at desc);
+alter table access_log enable row level security;
